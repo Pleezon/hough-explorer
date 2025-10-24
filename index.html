@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Explore Hough Space</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Interactive Hough Transform Explorer</h1>
+    <div id="cv-status" class="badge">Loading OpenCV.js…</div>
+  </header>
+
+  <main class="layout">
+    <section class="left">
+      <div class="panel">
+        <h2>Point Plane (click or drag to add points)</h2>
+        <div class="toolbar">
+          <button id="undoBtn" title="Undo last action">Undo</button>
+          <button id="clearBtn" title="Clear all points">Clear</button>
+          <label>Snap to grid <input id="snap" type="checkbox" checked></label>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="pointsCanvas" width="400" height="400"></canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Hough Space</h2>
+        <div class="toolbar">
+          <button id="recomputeBtn">Recompute</button>
+        </div>
+        <div class="canvas-wrap dark">
+          <canvas id="houghCanvas" width="400" height="400"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section class="right">
+      <div class="panel code">
+        <h2>Editable Transform Code</h2>
+        <div class="code-toolbar">
+          <button id="runCodeBtn">Run</button>
+          <button id="resetCodeBtn">Reset</button>
+          <span id="codeStatus" class="badge">Ready</span>
+        </div>
+        <textarea id="codeEditor" spellcheck="false"></textarea>
+      </div>
+    </section>
+  </main>
+
+
+  <script src="app.js" defer></script>
+  <script src="https://docs.opencv.org/4.x/opencv.js" defer></script>
+</body>
+</html>
