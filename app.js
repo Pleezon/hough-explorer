@@ -69,7 +69,6 @@
   function getEditorValue() { return editor ? editor.getValue() : ''; }
   function setEditorValue(text) { if (editor) editor.setValue(text); }
 
-  const runCodeBtn = document.getElementById('runCodeBtn');
   const resetCodeBtn = document.getElementById('resetCodeBtn');
   const codeStatus = document.getElementById('codeStatus');
 
@@ -510,7 +509,6 @@
   }
 
 
-  runCodeBtn.addEventListener('click', recompute);
   resetCodeBtn.addEventListener('click', async () => {
     await loadDefaultStudentCode();
     setStatus(codeStatus, 'Code reset', true);
@@ -521,10 +519,6 @@
   resizeCanvases();
   drawPoints();
   // Seed with a few points for demo (normalized center-origin coordinates)
-  points = [
-    { x: -0.25, y: -0.25 },
-    { x: 0.25, y: 0.2 },
-    { x: 0.05, y: -0.05 }
-  ];
+
   drawPoints();
 })();
