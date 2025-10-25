@@ -10,7 +10,6 @@
   const undoBtn = document.getElementById('undoBtn');
   const clearBtn = document.getElementById('clearBtn');
   const recomputeBtn = document.getElementById('recomputeBtn');
-  const snapInput = document.getElementById('snap');
 
 
   const codeEditor = document.getElementById('codeEditor');
@@ -96,8 +95,10 @@
 
     if (pointsChanged) {
       drawPoints();
+      // Recompute as point coordinate scaling depends on W/H
+      recompute();
     }
-    if (houghChanged) {
+    if (houghChanged && !pointsChanged) {
       // Re-render the Hough image at the new size
       recompute();
     }
@@ -112,11 +113,11 @@
       const resp = await fetch('student-code.js', { cache: 'no-store' });
       const text = await resp.text();
       codeEditor.value = text;
-      if (cvReady && !initialTriggered) { initialTriggered = true; recompute(); }
+      if (!initialTriggered) { initialTriggered = true; recompute(); }
     } catch (e) {
       console.error('Failed to load student-code.js', e);
-      codeEditor.value = '// Failed to load student-code.js. Define function transformToMat(points,width,height,options,cv) and return cv.Mat.';
-      if (cvReady && !initialTriggered) { initialTriggered = true; recompute(); }
+      codeEditor.value = '// Failed to load student-code.js. Define function fillHough(hough,points,width,height,helpers).';
+      if (!initialTriggered) { initialTriggered = true; recompute(); }
     }
   }
   loadDefaultStudentCode();
@@ -156,39 +157,138 @@
     pointsCtx.fillStyle = '#111827';
     pointsCtx.fillRect(0,0,W,H);
 
-    // Grid
+    const cX = W / 2;
+    const cY = H / 2;
+
+    // Grid centered at (0,0) in the canvas center
     pointsCtx.strokeStyle = '#1f2937';
     pointsCtx.lineWidth = 1;
     const gridStep = 20;
-    for (let x = 0; x <= W; x += gridStep) {
+
+    // Vertical lines
+    for (let dx = 0; cX + dx <= W; dx += gridStep) {
+      const x = Math.round(cX + dx) + 0.5;
       pointsCtx.beginPath();
-      pointsCtx.moveTo(x + 0.5, 0);
-      pointsCtx.lineTo(x + 0.5, H);
+      pointsCtx.moveTo(x, 0);
+      pointsCtx.lineTo(x, H);
       pointsCtx.stroke();
-    }
-    for (let y = 0; y <= H; y += gridStep) {
+      if (dx === 0) continue;
+      const xl = Math.round(cX - dx) + 0.5;
       pointsCtx.beginPath();
-      pointsCtx.moveTo(0, y + 0.5);
-      pointsCtx.lineTo(W, y + 0.5);
+      pointsCtx.moveTo(xl, 0);
+      pointsCtx.lineTo(xl, H);
       pointsCtx.stroke();
     }
 
-    // Axes
+    // Horizontal lines
+    for (let dy = 0; cY + dy <= H; dy += gridStep) {
+      const y = Math.round(cY + dy) + 0.5;
+      pointsCtx.beginPath();
+      pointsCtx.moveTo(0, y);
+      pointsCtx.lineTo(W, y);
+      pointsCtx.stroke();
+      if (dy === 0) continue;
+      const yu = Math.round(cY - dy) + 0.5;
+      pointsCtx.beginPath();
+      pointsCtx.moveTo(0, yu);
+      pointsCtx.lineTo(W, yu);
+      pointsCtx.stroke();
+    }
+
+    // Axes (centered)
     pointsCtx.strokeStyle = '#f97316';
     pointsCtx.lineWidth = 1.5;
     pointsCtx.beginPath();
-    pointsCtx.moveTo(0, H/2 + 0.5);
-    pointsCtx.lineTo(W, H/2 + 0.5);
-    pointsCtx.moveTo(W/2 + 0.5, 0);
-    pointsCtx.lineTo(W/2 + 0.5, H);
+    pointsCtx.moveTo(0, Math.round(cY) + 0.5);
+    pointsCtx.lineTo(W, Math.round(cY) + 0.5);
+    pointsCtx.moveTo(Math.round(cX) + 0.5, 0);
+    pointsCtx.lineTo(Math.round(cX) + 0.5, H);
     pointsCtx.stroke();
 
-    // Points
+    // Axis ticks and labels (pixels from center)
+    pointsCtx.fillStyle = '#d1d5db';
+    pointsCtx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+    pointsCtx.textAlign = 'center';
+    pointsCtx.textBaseline = 'top';
+
+    const maxSpan = Math.max(W, H);
+    const targetTicks = 8;
+    const rawStep = maxSpan / targetTicks;
+    const nice = niceStep(rawStep);
+
+    // X-axis ticks (y = cY)
+    for (let xPix = cX; xPix <= W; xPix += nice) {
+      drawTickX(xPix, cY);
+      if (xPix !== cX) drawTickX(2*cX - xPix, cY);
+    }
+    // Y-axis ticks (x = cX)
+    for (let yPix = cY; yPix <= H; yPix += nice) {
+      drawTickY(cX, yPix);
+      if (yPix !== cY) drawTickY(cX, 2*cY - yPix);
+    }
+
+    // Axis labels
+    pointsCtx.fillStyle = '#f3f4f6';
+    // x label
+    pointsCtx.fillText('x', W - 70, cY + 6);
+    // y label (rotated)
+    pointsCtx.save();
+    pointsCtx.translate(cX + 12, 12);
+    pointsCtx.rotate(-Math.PI / 2);
+    pointsCtx.fillText('y', 0, 0);
+    pointsCtx.restore();
+
+    // Points (convert from normalized-centered to pixel)
     const size = 4; // fixed point size
     pointsCtx.fillStyle = '#e11d48';
     for (const p of points) {
-      pointsCtx.fillRect(p.x - size/2, p.y - size/2, size, size);
+      const px = p.x * W + cX;
+      const py = p.y * H + cY;
+      pointsCtx.fillRect(px - size/2, py - size/2, size, size);
     }
+  }
+
+  function drawTickX(xPix, yAxisPix) {
+    const cX = W/2, cY = H/2;
+    const val = Math.round(xPix - cX);
+    pointsCtx.strokeStyle = '#334155';
+    pointsCtx.beginPath();
+    pointsCtx.moveTo(Math.round(xPix)+0.5, yAxisPix - 4);
+    pointsCtx.lineTo(Math.round(xPix)+0.5, yAxisPix + 4);
+    pointsCtx.stroke();
+    if (Math.abs(val) > 0) {
+      pointsCtx.fillStyle = '#9ca3af';
+      pointsCtx.fillText(String(val), xPix, yAxisPix + 6);
+    }
+  }
+
+  function drawTickY(xAxisPix, yPix) {
+    const cX = W/2, cY = H/2;
+    const val = Math.round(yPix - cY);
+    pointsCtx.strokeStyle = '#334155';
+    pointsCtx.beginPath();
+    pointsCtx.moveTo(xAxisPix - 4, Math.round(yPix)+0.5);
+    pointsCtx.lineTo(xAxisPix + 4, Math.round(yPix)+0.5);
+    pointsCtx.stroke();
+    if (Math.abs(val) > 0) {
+      pointsCtx.fillStyle = '#9ca3af';
+      pointsCtx.textAlign = 'left';
+      pointsCtx.textBaseline = 'middle';
+      pointsCtx.fillText(String(val), xAxisPix + 6, yPix);
+      pointsCtx.textAlign = 'center';
+      pointsCtx.textBaseline = 'top';
+    }
+  }
+
+  function niceStep(step) {
+    const pow10 = Math.pow(10, Math.floor(Math.log10(step)));
+    const base = step / pow10;
+    let niceBase;
+    if (base < 1.5) niceBase = 1;
+    else if (base < 3) niceBase = 2;
+    else if (base < 7) niceBase = 5;
+    else niceBase = 10;
+    return niceBase * pow10;
   }
 
   function pushHistory() {
@@ -199,23 +299,23 @@
   function setPoints(newPoints) {
     points = newPoints;
     drawPoints();
+    recompute();
   }
 
   // Convert mouse event to canvas coordinates
   function getCanvasPos(evt, canvas) {
     const rect = canvas.getBoundingClientRect();
-    const x = Math.round((evt.clientX - rect.left) * (canvas.width / rect.width));
-    const y = Math.round((evt.clientY - rect.top) * (canvas.height / rect.height));
+    const px = (evt.clientX - rect.left) * (canvas.width / rect.width);
+    const py = (evt.clientY - rect.top) * (canvas.height / rect.height);
+    // Return normalized centered coordinates in [-0.5, 0.5] range
+    const x = (px - canvas.width / 2) / canvas.width;
+    const y = (py - canvas.height / 2) / canvas.height;
     return {x, y};
   }
 
   function maybeSnap(p) {
-    if (!snapInput.checked) return p;
-    const grid = 20;
-    return {
-      x: Math.round(p.x / grid) * grid,
-      y: Math.round(p.y / grid) * grid,
-    };
+    // Snap to grid disabled permanently
+    return p;
   }
 
   // Interaction
@@ -226,6 +326,7 @@
     const p = maybeSnap(getCanvasPos(e, pointsCanvas));
     points.push(p);
     drawPoints();
+    recompute();
   });
   window.addEventListener('pointerup', () => drawing = false);
   pointsCanvas.addEventListener('pointerleave', () => drawing = false);
@@ -236,6 +337,7 @@
     if (!last || last.x !== p.x || last.y !== p.y) {
       points.push(p);
       drawPoints();
+      recompute();
     }
   });
 
@@ -250,44 +352,177 @@
     setPoints([]);
   });
 
-  // Recompute hough using current student code that returns cv.Mat
+  // Recompute Hough using current student code that fills a greyscale grid (0..255)
   function recompute() {
-    waitForCV(() => {
-      // Auto-set resolution to match the output canvas (accurate per-pixel)
-      const thetaSteps = Math.max(1, houghCanvas.width|0);
-      const rhoSteps = Math.max(1, houghCanvas.height|0);
-      const code = codeEditor.value;
-      let fn;
-      try {
-        // sandbox-ish: only expose specific params
-        fn = new Function('points','width','height','options','cv', code + '\nreturn transformToMat(points,width,height,options,cv);');
-      } catch (e) {
-        setStatus(codeStatus, 'Syntax error: ' + e.message, false);
-        return;
-      }
-      try {
-        const mat = fn(points.slice(), W, H, {thetaSteps, rhoSteps}, cv);
-        if (!(mat && typeof mat === 'object' && mat.constructor && mat.constructor.name === 'Mat')) {
-          throw new Error('transformToMat must return a cv.Mat');
+    // Dimensions of the Hough canvas define the accumulator resolution
+    const cols = Math.max(1, houghCanvas.width|0);
+    const rows = Math.max(1, houghCanvas.height|0);
+
+    // Prepare numeric 2D array [rows][cols], initialized to 0 (black)
+    const hough = new Array(rows);
+    for (let r = 0; r < rows; r++) {
+      const row = new Array(cols);
+      for (let c = 0; c < cols; c++) row[c] = 0;
+      hough[r] = row;
+    }
+
+    // Helpers for mapping pixel indices to (theta, rho)
+    const rhoMax = Math.hypot(W, H) / 2;
+    const helpersForStudent = {
+      cols,
+      rows,
+      rhoMax,
+      thetaForCol: (c) => (c / (cols - 1 || 1)) * Math.PI, // [0, π]
+      rhoForRow: (r) => ((r / (rows - 1 || 1)) * 2 - 1) * rhoMax // [-rhoMax, +rhoMax]
+    };
+
+    // Build callable student function
+    const code = codeEditor.value;
+    let fill;
+    try {
+      fill = new Function('hough','points','width','height','helpers', code + '\nreturn (typeof fillHough==="function"? fillHough : undefined);')();
+    } catch (e) {
+      setStatus(codeStatus, 'Syntax error: ' + e.message, false);
+      return;
+    }
+    if (typeof fill !== 'function') {
+      setStatus(codeStatus, 'No fillHough(hough,points,width,height,helpers) function found', false);
+      return;
+    }
+
+    try {
+      // Convert normalized-centered coords to centered pixel coords for student function
+      const studentPoints = points.map(p => ({ x: p.x * W, y: p.y * H }));
+      fill(hough, studentPoints, W, H, helpersForStudent);
+
+      // Render greyscale grid to Hough canvas
+      const img = houghCtx.createImageData(cols, rows);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          let v = hough[r][c];
+          // Coerce to finite number in 0..255
+          if (typeof v !== 'number' || !isFinite(v)) v = 0;
+          if (v < 0) v = 0; else if (v > 255) v = 255;
+          const val = v & 0xFF;
+          const idx = (r * cols + c) * 4;
+          img.data[idx] = val;
+          img.data[idx+1] = val;
+          img.data[idx+2] = val;
+          img.data[idx+3] = 255;
         }
-        // Render to right canvas (avoid cv.imshow resizing our canvas): draw to temp then scale
-        const off = document.createElement('canvas');
-        cv.imshow(off, mat);
-        houghCtx.clearRect(0, 0, houghCanvas.width, houghCanvas.height);
-        houghCtx.imageSmoothingEnabled = false;
-        houghCtx.drawImage(off, 0, 0, houghCanvas.width, houghCanvas.height);
-        // Clean up
-        try { mat.delete && mat.delete(); } catch (_) {}
-        setStatus(codeStatus, 'Ran OK', true);
-      } catch (e) {
-        console.error(e);
-        setStatus(codeStatus, 'Runtime error: ' + e.message, false);
       }
-    });
+      // Draw with pixel-perfect scaling
+      const tmp = document.createElement('canvas');
+      tmp.width = cols; tmp.height = rows;
+      const tctx = tmp.getContext('2d');
+      tctx.putImageData(img, 0, 0);
+      houghCtx.clearRect(0, 0, houghCanvas.width, houghCanvas.height);
+      houghCtx.imageSmoothingEnabled = false;
+      houghCtx.drawImage(tmp, 0, 0, houghCanvas.width, houghCanvas.height);
+
+      // Overlay Hough axes and labels
+      drawHoughOverlay(cols, rows, rhoMax);
+
+      setStatus(codeStatus, 'Ran OK', true);
+    } catch (e) {
+      console.error(e);
+      setStatus(codeStatus, 'Runtime error: ' + e.message, false);
+    }
+  }
+
+  function drawHoughOverlay(cols, rows, rhoMax) {
+    const ctx = houghCtx;
+    const Wc = houghCanvas.width;
+    const Hc = houghCanvas.height;
+
+    ctx.save();
+    // Semi-transparent overlay so underlying image remains visible
+    ctx.globalAlpha = 1.0;
+
+    // Outline
+    ctx.strokeStyle = '#1f2937';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, Wc - 1, Hc - 1);
+
+    // Axes styles
+    const axisColor = '#f97316';
+    const tickColor = '#334155';
+    const labelColor = '#e5e7eb';
+
+    ctx.fillStyle = labelColor;
+    ctx.font = '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    // Theta ticks along X (0..π)
+    const thetaTicks = [0, Math.PI/4, Math.PI/2, 3*Math.PI/4, Math.PI];
+    // Draw baseline (x-axis) at bottom edge
+    ctx.strokeStyle = axisColor;
+    ctx.beginPath();
+    ctx.moveTo(0, Hc - 0.5);
+    ctx.lineTo(Wc, Hc - 0.5);
+    ctx.stroke();
+
+    ctx.strokeStyle = tickColor;
+    for (const t of thetaTicks) {
+      const x = (cols <= 1) ? 0.5 * Wc : (t / Math.PI) * (Wc - 1) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(Math.round(x) + 0.5, Hc - 8);
+      ctx.lineTo(Math.round(x) + 0.5, Hc - 0.5);
+      ctx.stroke();
+      const text = (t === 0) ? '0' : (t === Math.PI/2 ? 'π/2' : (t === Math.PI ? 'π' : 'π/4'.repeat(t === Math.PI/4 ? 1 : 0) || '3π/4'));
+      // Compute label safely
+      let lbl;
+      if (t === 0) lbl = '0';
+      else if (t === Math.PI/4) lbl = 'π/4';
+      else if (t === Math.PI/2) lbl = 'π/2';
+      else if (t === 3*Math.PI/4) lbl = '3π/4';
+      else lbl = 'π';
+      ctx.fillStyle = labelColor;
+      ctx.fillText(lbl, x, Hc - 18);
+    }
+    // Theta axis title
+    ctx.fillStyle = labelColor;
+    ctx.fillText('theta (rad)', Wc - 60, Hc - 32);
+
+    // Rho ticks along Y (top = -rhoMax, bottom = +rhoMax)
+    // Draw vertical axis line at left edge
+    ctx.strokeStyle = axisColor;
+    ctx.beginPath();
+    ctx.moveTo(0.5, 0);
+    ctx.lineTo(0.5, Hc);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    const rhoTicks = [-rhoMax, -rhoMax/2, 0, rhoMax/2, rhoMax];
+    ctx.strokeStyle = tickColor;
+    for (const r of rhoTicks) {
+      const y = (rows <= 1) ? 0.5 * Hc : ((r + rhoMax) / (2 * rhoMax)) * (Hc - 1) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0.5, Math.round(y) + 0.5);
+      ctx.lineTo(8, Math.round(y) + 0.5);
+      ctx.stroke();
+      const val = Math.round(r);
+      ctx.fillStyle = labelColor;
+      ctx.fillText(String(val), 10, y);
+    }
+
+    // Rho axis title (rotated)
+    ctx.save();
+    ctx.translate(20, 16);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = labelColor;
+    ctx.fillText('rho', 0, 0);
+    ctx.restore();
+
+    ctx.restore();
   }
 
   recomputeBtn.addEventListener('click', recompute);
-  snapInput.addEventListener('change', drawPoints);
 
   runCodeBtn.addEventListener('click', recompute);
   resetCodeBtn.addEventListener('click', async () => {
@@ -299,8 +534,12 @@
   // Initial sizing and draw
   resizeCanvases();
   drawPoints();
-  // Seed with a few points for demo
-  points = [{x: 100, y: 100},{x: 300, y: 280},{x: 220, y: 180}];
+  // Seed with a few points for demo (normalized center-origin coordinates)
+  points = [
+    { x: -0.25, y: -0.25 },
+    { x: 0.25, y: 0.2 },
+    { x: 0.05, y: -0.05 }
+  ];
   drawPoints();
 
   // Recompute once OpenCV is ready (or soon after)

@@ -1,46 +1,40 @@
-// Default student-editable CV code
-// Implement transformToMat that returns a cv.Mat visualizing Hough accumulator for lines.
-// Signature: function transformToMat(points, width, height, options, cv) -> cv.Mat
-// - points: array of {x, y}
-// - width, height: size of the left canvas
-// - options: { thetaSteps, rhoSteps } — automatically set to match the output canvas size (no sliders)
-// - cv: OpenCV.js namespace
-// Return: cv.Mat (rows=rhoSteps, cols=thetaSteps), either CV_8UC1 (grayscale) or CV_8UC3 (BGR)
+// STUDENT TASK: Fill the Hough space with greyscale values (0..255).
+// You only edit fillHough(hough, points, width, height, helpers)
+// - hough: numeric 2D array [rows][cols]; set hough[r][c] to a brightness 0..255
+//          (0 = black, 255 = white). Brighter means more points support that line.
+// - points: array of { x, y } in centered pixel coords (origin at canvas center; +x right, +y down)
+// - width, height: size of the point canvas (in pixels)
+// - helpers: { thetaForCol(c), rhoForRow(r), rhoMax, cols, rows }
+// Idea: For each pixel (r,c) in Hough space, compute the corresponding line parameters
+//       theta = helpers.thetaForCol(c) and rho = helpers.rhoForRow(r). Count how many
+//       points lie near that line (|x cosθ + y sinθ - rho| < epsilon) and map that count
+//       to a brightness value.
 
-function transformToMat(points, width, height, options, cv) {
-  const { thetaSteps, rhoSteps } = options;
-  const diag = Math.hypot(width, height);
-  const rhoMax = diag;
-  const thetaStep = Math.PI / thetaSteps; // 0..π
+function fillHough(hough, points, width, height, helpers) {
+  const { thetaForCol, rhoForRow, cols, rows } = helpers;
 
-  // Accumulator (Float32)
-  const accum = new Float32Array(rhoSteps * thetaSteps);
-  for (let p = 0; p < points.length; p++) {
-    const { x, y } = points[p];
-    for (let ti = 0; ti < thetaSteps; ti++) {
-      const theta = ti * thetaStep;
-      const rho = x * Math.cos(theta) + y * Math.sin(theta);
-      const r = Math.round(((rho + rhoMax) / (2 * rhoMax)) * (rhoSteps - 1));
-      if (r >= 0 && r < rhoSteps) {
-        accum[r * thetaSteps + ti] += 1;
+  // Distance tolerance in pixels for a point to "vote" for a line bin.
+  const epsilon = 2; // pixels
+
+  // Scaling from vote count -> brightness. Adjust the scale to taste.
+  // Example: 1 close point -> ~64, 2 -> ~128, 3+ -> saturates at 255.
+  const countToBrightness = (count) => Math.min(255, count * 64);
+
+  for (let r = 0; r < rows; r++) {
+    const rho = rhoForRow(r);
+    for (let c = 0; c < cols; c++) {
+      const theta = thetaForCol(c);
+      const ct = Math.cos(theta);
+      const st = Math.sin(theta);
+
+      let votes = 0;
+      for (let i = 0; i < points.length; i++) {
+        const { x, y } = points[i];
+        const d = x * ct + y * st - rho;
+        if (Math.abs(d) <= epsilon) votes++;
       }
-    }
-  }
 
-  // Normalize to 0..255
-  let max = 0;
-  for (let i = 0; i < accum.length; i++) if (accum[i] > max) max = accum[i];
-  const mat = new cv.Mat(rhoSteps, thetaSteps, cv.CV_8UC1);
-  if (max === 0) {
-    mat.setTo(new cv.Scalar(0));
-    return mat;
-  }
-  const data = mat.data;
-  for (let r = 0; r < rhoSteps; r++) {
-    for (let t = 0; t < thetaSteps; t++) {
-      const v = accum[r * thetaSteps + t] / max;
-      data[r * thetaSteps + t] = Math.round(v * 255);
+      hough[r][c] = countToBrightness(votes);
     }
   }
-  return mat;
 }
