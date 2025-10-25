@@ -73,7 +73,6 @@
   const runCodeBtn = document.getElementById('runCodeBtn');
   const resetCodeBtn = document.getElementById('resetCodeBtn');
   const codeStatus = document.getElementById('codeStatus');
-  const cvStatus = document.getElementById('cv-status');
 
   let W = pointsCanvas.width;
   let H = pointsCanvas.height;
@@ -88,38 +87,6 @@
     el.style.color = '#fff';
   }
 
-  // OpenCV ready handling (rely on global onOpenCvReady hook)
-  let cvReady = false;
-  const cvReadyQueue = [];
-  function waitForCV(callback) {
-    if (cvReady) return callback();
-    cvReadyQueue.push(callback);
-  }
-  // Hook into existing global onOpenCvReady if provided, otherwise define it
-  (function(){
-    const previous = window.onOpenCvReady;
-    window.onOpenCvReady = function() {
-      if (cvReady) return; // run once
-      try { if (typeof previous === 'function') previous.apply(this, arguments); } catch (e) { console.error(e); }
-      cvReady = true;
-      setStatus(cvStatus, 'OpenCV.js ready', true);
-      // flush queued callbacks
-      const q = cvReadyQueue.splice(0, cvReadyQueue.length);
-      for (const cb of q) {
-        try { cb(); } catch (e) { console.error('waitForCV callback error:', e); }
-      }
-    };
-    // Ensure OpenCV.js invokes our handler when WASM is ready
-    window.Module = window.Module || {};
-    if (typeof window.Module.onRuntimeInitialized !== 'function') {
-      window.Module.onRuntimeInitialized = function() { window.onOpenCvReady(); };
-    }
-    // In case OpenCV was initialized before this script executed
-    if (typeof window.cv !== 'undefined' && window.cv && window.cv.Mat) {
-      // emulate callback to flush queue
-      window.onOpenCvReady();
-    }
-  })();
 
   // initial trigger guard
   let initialTriggered = false;
@@ -395,7 +362,6 @@
       hough[r] = row;
     }
 
-    // Precompute rhoMax for overlay and for students' convenience if they compute it
     const rhoMax = Math.hypot(W, H) / 2;
 
     // Build callable student function
@@ -563,7 +529,4 @@
     { x: 0.05, y: -0.05 }
   ];
   drawPoints();
-
-  // Recompute once OpenCV is ready (or soon after)
-  waitForCV(() => recompute());
 })();
