@@ -9,7 +9,6 @@
 
   const undoBtn = document.getElementById('undoBtn');
   const clearBtn = document.getElementById('clearBtn');
-  const recomputeBtn = document.getElementById('recomputeBtn');
 
 
   const codeEditorEl = document.getElementById('codeEditor');
@@ -510,7 +509,6 @@
     ctx.restore();
   }
 
-  recomputeBtn.addEventListener('click', recompute);
 
   runCodeBtn.addEventListener('click', recompute);
   resetCodeBtn.addEventListener('click', async () => {
