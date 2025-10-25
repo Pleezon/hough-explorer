@@ -12,7 +12,66 @@
   const recomputeBtn = document.getElementById('recomputeBtn');
 
 
-  const codeEditor = document.getElementById('codeEditor');
+  const codeEditorEl = document.getElementById('codeEditor');
+  let editor; // Monaco instance
+
+  function initMonaco(initialValue = '') {
+    // Load Monaco via AMD loader configured in index.html
+    window.require(['vs/editor/editor.main'], function () {
+      editor = monaco.editor.create(codeEditorEl, {
+        value: initialValue,
+        language: 'javascript',
+        theme: 'vs-dark',
+        automaticLayout: true,
+        wordWrap: 'on',
+        minimap: { enabled: false },
+        fontSize: 13,
+        tabSize: 2,
+        renderWhitespace: 'selection',
+      });
+
+      // Provide better IntelliSense for the student API via JSDoc types
+      const dts = `
+        /**
+         * @typedef {{
+         *   thetaForCol: (c:number)=>number,
+         *   rhoForRow: (r:number)=>number,
+         *   rhoMax: number,
+         *   cols: number,
+         *   rows: number
+         * }} Helpers
+         *
+         * @typedef {{x:number,y:number}} Point
+         *
+         * @param {number[][]} hough - rows x cols, brightness 0..255
+         * @param {Point[]} points - centered pixel coords
+         * @param {number} width
+         * @param {number} height
+         * @param {Helpers} helpers
+         */
+        function fillHough(hough, points, width, height, helpers) {}
+      `;
+      try {
+        monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
+        monaco.languages.typescript.javascriptDefaults.addExtraLib(dts, 'ts:filename/fillHough.d.ts');
+      } catch (e) { /* ignore if monaco TS not ready */ }
+
+      // Debounced auto-run on edits
+      let t;
+      editor.onDidChangeModelContent(() => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          try { recompute(); } catch (e) { /* ignore */ }
+        }, 400);
+      });
+    
+      // Trigger an initial compute once the editor is ready
+      try { recompute(); } catch (e) { /* ignore */ }
+    });
+  }
+  function getEditorValue() { return editor ? editor.getValue() : ''; }
+  function setEditorValue(text) { if (editor) editor.setValue(text); }
+
   const runCodeBtn = document.getElementById('runCodeBtn');
   const resetCodeBtn = document.getElementById('resetCodeBtn');
   const codeStatus = document.getElementById('codeStatus');
@@ -112,11 +171,12 @@
     try {
       const resp = await fetch('student-code.js', { cache: 'no-store' });
       const text = await resp.text();
-      codeEditor.value = text;
+      if (!editor) initMonaco(text); else setEditorValue(text);
       if (!initialTriggered) { initialTriggered = true; recompute(); }
     } catch (e) {
       console.error('Failed to load student-code.js', e);
-      codeEditor.value = '// Failed to load student-code.js. Define function fillHough(hough,points,width,height,helpers).';
+      const fallback = '// Failed to load student-code.js. Define function fillHough(hough,points,width,height,helpers).';
+      if (!editor) initMonaco(fallback); else setEditorValue(fallback);
       if (!initialTriggered) { initialTriggered = true; recompute(); }
     }
   }
@@ -377,7 +437,7 @@
     };
 
     // Build callable student function
-    const code = codeEditor.value;
+    const code = getEditorValue();
     let fill;
     try {
       fill = new Function('hough','points','width','height','helpers', code + '\nreturn (typeof fillHough==="function"? fillHough : undefined);')();

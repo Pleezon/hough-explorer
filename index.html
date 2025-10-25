@@ -44,12 +44,17 @@
           <button id="resetCodeBtn">Reset</button>
           <span id="codeStatus" class="badge">Ready</span>
         </div>
-        <textarea id="codeEditor" spellcheck="false"></textarea>
+        <div id="codeEditor" class="editor"></div>
       </div>
     </section>
   </main>
 
-
+  <!-- Monaco Editor loader (VS Code's editor) -->
+  <script>
+    window.require = window.require || {};
+    window.require.paths = { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs' };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js"></script>
   <script src="app.js" defer></script>
   <script src="https://docs.opencv.org/4.x/opencv.js" defer></script>
 </body>
