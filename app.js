@@ -33,23 +33,21 @@
       // Provide better IntelliSense for the student API via JSDoc types
       const dts = `
         /**
-         * @typedef {{
-         *   thetaForCol: (c:number)=>number,
-         *   rhoForRow: (r:number)=>number,
-         *   rhoMax: number,
-         *   cols: number,
-         *   rows: number
-         * }} Helpers
-         *
          * @typedef {{x:number,y:number}} Point
          *
-         * @param {number[][]} hough - rows x cols, brightness 0..255
-         * @param {Point[]} points - centered pixel coords
-         * @param {number} width
-         * @param {number} height
-         * @param {Helpers} helpers
+         * Student should define both functions below:
+         *
+         * linesThroughPoint(x, y, theta_res, rho_res): returns an array of {theta:number, rho:number}
+         *   - theta in [0, π]
+         *   - rho in pixels (centered coordinate system)
+         *
+         * fillHough(hough, points, width, height): fills greyscale values 0..255
+         *   - hough: number[rows][cols]
+         *   - points: Point[] in centered pixels
+         *   - width, height: point canvas size in pixels
          */
-        function fillHough(hough, points, width, height, helpers) {}
+        function linesThroughPoint(x, y, theta_res, rho_res) {}
+        function fillHough(hough, points, width, height) {}
       `;
       try {
         monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
@@ -175,41 +173,12 @@
       if (!initialTriggered) { initialTriggered = true; recompute(); }
     } catch (e) {
       console.error('Failed to load student-code.js', e);
-      const fallback = '// Failed to load student-code.js. Define function fillHough(hough,points,width,height,helpers).';
+      const fallback = '// Failed to load student-code.js.';
       if (!editor) initMonaco(fallback); else setEditorValue(fallback);
       if (!initialTriggered) { initialTriggered = true; recompute(); }
     }
   }
   loadDefaultStudentCode();
-
-  // Helpers (kept for potential future use)
-  const helpers = {
-    normalizeAndRender: (accum, rhoSteps, thetaSteps) => {
-      let max = 0;
-      for (let i = 0; i < accum.length; i++) if (accum[i] > max) max = accum[i];
-      const img = pointsCtx.createImageData(thetaSteps, rhoSteps);
-      for (let r = 0; r < rhoSteps; r++) {
-        for (let t = 0; t < thetaSteps; t++) {
-          const v = max > 0 ? accum[r * thetaSteps + t] / max : 0;
-          const c = Math.round(v * 255);
-          const idx = (r * thetaSteps + t) * 4;
-          img.data[idx] = c;
-          img.data[idx + 1] = c;
-          img.data[idx + 2] = c;
-          img.data[idx + 3] = 255;
-        }
-      }
-      // fit image to hough canvas with scaling
-      const tmp = document.createElement('canvas');
-      tmp.width = thetaSteps; tmp.height = rhoSteps;
-      const tctx = tmp.getContext('2d');
-      tctx.putImageData(img, 0, 0);
-      houghCtx.clearRect(0, 0, houghCanvas.width, houghCanvas.height);
-      houghCtx.imageSmoothingEnabled = false;
-      houghCtx.drawImage(tmp, 0, 0, houghCanvas.width, houghCanvas.height);
-      return img;
-    }
-  };
 
   // Drawing utilities
   function drawPoints() {
@@ -426,34 +395,27 @@
       hough[r] = row;
     }
 
-    // Helpers for mapping pixel indices to (theta, rho)
+    // Precompute rhoMax for overlay and for students' convenience if they compute it
     const rhoMax = Math.hypot(W, H) / 2;
-    const helpersForStudent = {
-      cols,
-      rows,
-      rhoMax,
-      thetaForCol: (c) => (c / (cols - 1 || 1)) * Math.PI, // [0, π]
-      rhoForRow: (r) => ((r / (rows - 1 || 1)) * 2 - 1) * rhoMax // [-rhoMax, +rhoMax]
-    };
 
     // Build callable student function
     const code = getEditorValue();
     let fill;
     try {
-      fill = new Function('hough','points','width','height','helpers', code + '\nreturn (typeof fillHough==="function"? fillHough : undefined);')();
+      fill = new Function('hough','points','width','height', code + '\nreturn (typeof fillHough==="function"? fillHough : undefined);')();
     } catch (e) {
       setStatus(codeStatus, 'Syntax error: ' + e.message, false);
       return;
     }
     if (typeof fill !== 'function') {
-      setStatus(codeStatus, 'No fillHough(hough,points,width,height,helpers) function found', false);
+      setStatus(codeStatus, 'No fillHough(hough,points,width,height) function found', false);
       return;
     }
 
     try {
       // Convert normalized-centered coords to centered pixel coords for student function
       const studentPoints = points.map(p => ({ x: p.x * W, y: p.y * H }));
-      fill(hough, studentPoints, W, H, helpersForStudent);
+      fill(hough, studentPoints, W, H);
 
       // Render greyscale grid to Hough canvas
       const img = houghCtx.createImageData(cols, rows);
