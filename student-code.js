@@ -28,7 +28,7 @@ function fillHough(hough, points, width, height) {
 
             // Check bounds and accumulate
             if (r >= 0 && r < rows) {
-                hough[r][c] = Math.min(hough[r][c] + 20, 255);
+                hough[r][c]++;
             }
         }
     }

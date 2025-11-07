@@ -380,7 +380,21 @@
       // Convert normalized-centered coords to centered pixel coords for student function
       const studentPoints = points.map(p => ({ x: p.x * W, y: p.y * H }));
       fill(hough, studentPoints, W, H);
-
+      // normalize to 0..255
+      let max = 0
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const v = hough[r][c];
+          if (v > max){
+              max = v
+          }
+        }
+      }
+      for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            hough[r][c] = hough[r][c] / max * 255;
+          }
+      }
       // Render greyscale grid to Hough canvas
       const img = houghCtx.createImageData(cols, rows);
       for (let r = 0; r < rows; r++) {
