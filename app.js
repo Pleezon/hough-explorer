@@ -392,7 +392,8 @@
       }
       for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
-            hough[r][c] = hough[r][c] / max * 255;
+              norm = hough[r][c] / max
+            hough[r][c] =  Math.pow(norm, 0.5) * 255;
           }
       }
       // Render greyscale grid to Hough canvas
