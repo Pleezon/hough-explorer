@@ -23,7 +23,7 @@ function fillHough(hough, points, width, height) {
 
     /* compute the theta-resolution: "How much theta values does one pixel of hough space descibe?"
     */
-    const theta_res = Math.PI / theta_axis_pixels;
+    const theta_res = 0 /* <-- REPLACE WITH YOUR CODE */;
 
     const rho_res = (2 * rhoMax) / (rho_axis_pixels -1);
 
